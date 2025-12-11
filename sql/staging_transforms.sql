@@ -47,9 +47,10 @@ SELECT DISTINCT
     company_id,
     company_name,
     industry,
-    company_size
+    company_size_clean
 FROM stg_dim_company
-WHERE company_id IS NOT NULL;
+WHERE company_id IS NOT NULL
+  AND company_name IS NOT NULL;
 
 -- Verification
 SELECT 'dim_company' AS table_name, COUNT(*) AS row_count FROM dim_company;
@@ -140,15 +141,12 @@ SELECT
     stg.posting_id,
 
     -- Foreign keys (using surrogate keys from dimensions)
-    -- TODO: These joins assume staging already has surrogate keys
-    -- If not, you'll need to join back to dimension tables
     stg.job_id,
     stg.company_id,
     stg.location_id,
     stg.employment_type_id,
 
     -- Date dimension
-    -- TODO: Add actual posted_date column from staging
     NULL AS posted_date,
 
     -- Measures
@@ -157,11 +155,19 @@ SELECT
     COALESCE(stg.salary_currency, 'USD') AS salary_currency,
 
     -- Additional attributes
-    -- TODO: Add application_url if available in staging
     NULL AS application_url
 
 FROM stg_fact_posting stg
-WHERE stg.posting_id IS NOT NULL;
+-- Ensure all foreign keys exist in dimension tables
+LEFT JOIN dim_job j ON stg.job_id = j.job_id
+LEFT JOIN dim_company c ON stg.company_id = c.company_id
+LEFT JOIN dim_location l ON stg.location_id = l.location_id
+LEFT JOIN dim_employment_type e ON stg.employment_type_id = e.employment_type_id
+WHERE stg.posting_id IS NOT NULL
+  AND j.job_id IS NOT NULL
+  AND c.company_id IS NOT NULL
+  AND l.location_id IS NOT NULL
+  AND e.employment_type_id IS NOT NULL;
 
 -- Verification
 SELECT 'fact_posting' AS table_name, COUNT(*) AS row_count FROM fact_posting;
@@ -179,11 +185,14 @@ SELECT 'fact_posting' AS table_name, COUNT(*) AS row_count FROM fact_posting;
 
 INSERT INTO bridge_posting_skill (posting_id, skill_id)
 SELECT DISTINCT
-    posting_id,
-    skill_id
-FROM stg_bridge_posting_skill
-WHERE posting_id IS NOT NULL
-  AND skill_id IS NOT NULL;
+    stg.posting_id,
+    stg.skill_id
+FROM stg_bridge_posting_skill stg
+-- Only insert if posting exists in fact table and skill exists in dim table
+INNER JOIN fact_posting f ON stg.posting_id = f.posting_id
+INNER JOIN dim_skill s ON stg.skill_id = s.skill_id
+WHERE stg.posting_id IS NOT NULL
+  AND stg.skill_id IS NOT NULL;
 
 -- Verification
 SELECT 'bridge_posting_skill' AS table_name, COUNT(*) AS row_count FROM bridge_posting_skill;
