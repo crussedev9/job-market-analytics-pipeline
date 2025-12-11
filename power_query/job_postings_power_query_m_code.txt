@@ -1,0 +1,270 @@
+// ============================================================================
+// Job Market Analytics Pipeline - Power Query M Code
+// ============================================================================
+// Purpose: Load and transform data from SQLite or CSV files for Power BI
+//
+// This file contains Power Query (M language) code templates that can be
+// pasted into Power BI's Power Query Editor (Advanced Editor).
+//
+// Choose ONE of the following connection methods:
+//   Option A: Connect to SQLite database (recommended)
+//   Option B: Connect to processed CSV files
+//
+// Author: Analytics Portfolio Project
+// ============================================================================
+
+
+// ============================================================================
+// OPTION A: CONNECT TO SQLITE DATABASE
+// ============================================================================
+// Use this approach to connect Power BI directly to the SQLite database
+
+// TODO: Update the file path to your actual database location
+// Example Windows path: "C:\Users\YourName\job-market-analytics-pipeline\job_market.db"
+// ============================================================================
+
+let
+    // Step 1: Define database path
+    DatabasePath = "C:\Users\ckrus\job-market-analytics-pipeline\job_market.db",
+
+    // Step 2: Connect to SQLite database
+    // Note: You may need to install SQLite ODBC driver or use a connector
+    Source = Odbc.DataSource(
+        "Driver={SQLite3 ODBC Driver};Database=" & DatabasePath,
+        [HierarchicalNavigation=true]
+    ),
+
+    // Step 3: Select the database
+    Database = Source{[Name="main"]}[Data],
+
+    // Step 4: Load analytical view (choose one)
+    // Option 4a: Load denormalized detail view
+    JobPostingDetails = Database{[Schema="",Item="vw_job_posting_details"]}[Data],
+
+    // Option 4b: Load skill demand view
+    // SkillDemand = Database{[Schema="",Item="vw_skill_demand"]}[Data],
+
+    // Option 4c: Load salary analysis view
+    // SalaryAnalysis = Database{[Schema="",Item="vw_salary_by_title_and_location"]}[Data],
+
+    // Step 5: Apply transformations (optional)
+    TransformedData = Table.TransformColumnTypes(
+        JobPostingDetails,
+        {
+            {"posting_id", Int64.Type},
+            {"posted_date", type date},
+            {"salary_min", type number},
+            {"salary_max", type number},
+            {"salary_midpoint", type number},
+            {"skill_count", Int64.Type},
+            {"is_remote", type logical}
+        }
+    ),
+
+    // Step 6: Add calculated columns
+    FinalData = Table.AddColumn(
+        TransformedData,
+        "salary_range_category",
+        each
+            if [salary_midpoint] = null then "Unknown"
+            else if [salary_midpoint] < 60000 then "< $60K"
+            else if [salary_midpoint] < 90000 then "$60K - $90K"
+            else if [salary_midpoint] < 120000 then "$90K - $120K"
+            else if [salary_midpoint] < 150000 then "$120K - $150K"
+            else ">= $150K",
+        type text
+    )
+in
+    FinalData
+
+
+// ============================================================================
+// OPTION B: CONNECT TO PROCESSED CSV FILES
+// ============================================================================
+// Use this approach if you prefer to work with CSV exports
+// ============================================================================
+
+/*
+let
+    // Step 1: Define folder path
+    FolderPath = "C:\Users\ckrus\job-market-analytics-pipeline\data\processed\",
+
+    // Step 2: Load fact table
+    FactPosting = Csv.Document(
+        File.Contents(FolderPath & "fact_posting.csv"),
+        [Delimiter=",", Columns=10, Encoding=65001, QuoteStyle=QuoteStyle.None]
+    ),
+    FactPostingHeaders = Table.PromoteHeaders(FactPosting, [PromoteAllScalars=true]),
+    FactPostingTypes = Table.TransformColumnTypes(
+        FactPostingHeaders,
+        {
+            {"posting_id", Int64.Type},
+            {"job_id", Int64.Type},
+            {"company_id", Int64.Type},
+            {"location_id", Int64.Type},
+            {"employment_type_id", Int64.Type},
+            {"posted_date", type date},
+            {"salary_min", type number},
+            {"salary_max", type number},
+            {"salary_currency", type text},
+            {"application_url", type text}
+        }
+    ),
+
+    // Step 3: Load dimension tables
+    DimJob = Csv.Document(
+        File.Contents(FolderPath & "dim_job.csv"),
+        [Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.None]
+    ),
+    DimJobHeaders = Table.PromoteHeaders(DimJob, [PromoteAllScalars=true]),
+
+    DimCompany = Csv.Document(
+        File.Contents(FolderPath & "dim_company.csv"),
+        [Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.None]
+    ),
+    DimCompanyHeaders = Table.PromoteHeaders(DimCompany, [PromoteAllScalars=true]),
+
+    DimLocation = Csv.Document(
+        File.Contents(FolderPath & "dim_location.csv"),
+        [Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.None]
+    ),
+    DimLocationHeaders = Table.PromoteHeaders(DimLocation, [PromoteAllScalars=true]),
+
+    // TODO: Load remaining dimension tables (dim_employment_type, dim_skill)
+    // TODO: Load bridge table (bridge_posting_skill)
+
+    // Step 4: Add calculated columns to fact table
+    FactWithCalculations = Table.AddColumn(
+        FactPostingTypes,
+        "salary_midpoint",
+        each
+            if [salary_min] <> null and [salary_max] <> null
+            then ([salary_min] + [salary_max]) / 2
+            else null,
+        type number
+    )
+
+in
+    FactWithCalculations
+*/
+
+
+// ============================================================================
+// ADDITIONAL TRANSFORMATIONS (APPLY TO EITHER OPTION)
+// ============================================================================
+// Common transformations to apply after loading data
+// ============================================================================
+
+/*
+// Filter for recent data (e.g., last 12 months)
+// ----------------------------------------------------------------------------
+let
+    FilteredData = Table.SelectRows(
+        Source,
+        each [posted_date] >= Date.AddMonths(Date.From(DateTime.LocalNow()), -12)
+    )
+in
+    FilteredData
+
+
+// Add date intelligence columns
+// ----------------------------------------------------------------------------
+let
+    AddDateColumns = Table.AddColumn(
+        Source,
+        "posting_year",
+        each Date.Year([posted_date]),
+        Int64.Type
+    ),
+    AddMonthColumn = Table.AddColumn(
+        AddDateColumns,
+        "posting_month",
+        each Date.ToText([posted_date], "MMM yyyy"),
+        type text
+    ),
+    AddQuarterColumn = Table.AddColumn(
+        AddMonthColumn,
+        "posting_quarter",
+        each "Q" & Number.ToText(Date.QuarterOfYear([posted_date])) & " " & Number.ToText(Date.Year([posted_date])),
+        type text
+    )
+in
+    AddQuarterColumn
+
+
+// Categorize salaries into bands
+// ----------------------------------------------------------------------------
+let
+    SalaryBands = Table.AddColumn(
+        Source,
+        "salary_band",
+        each
+            if [salary_midpoint] = null then "Not Specified"
+            else if [salary_midpoint] < 50000 then "Entry Level (<$50K)"
+            else if [salary_midpoint] < 75000 then "Junior ($50K-$75K)"
+            else if [salary_midpoint] < 100000 then "Mid-level ($75K-$100K)"
+            else if [salary_midpoint] < 130000 then "Senior ($100K-$130K)"
+            else if [salary_midpoint] < 160000 then "Lead ($130K-$160K)"
+            else "Executive ($160K+)",
+        type text
+    )
+in
+    SalaryBands
+
+
+// Create work arrangement flags
+// ----------------------------------------------------------------------------
+let
+    AddWorkFlags = Table.AddColumn(
+        Source,
+        "is_fully_remote",
+        each [work_arrangement] = "Remote",
+        type logical
+    ),
+    AddHybridFlag = Table.AddColumn(
+        AddWorkFlags,
+        "is_hybrid",
+        each [work_arrangement] = "Hybrid",
+        type logical
+    ),
+    AddOnsiteFlag = Table.AddColumn(
+        AddHybridFlag,
+        "is_onsite",
+        each [work_arrangement] = "On-site",
+        type logical
+    )
+in
+    AddOnsiteFlag
+*/
+
+
+// ============================================================================
+// USAGE INSTRUCTIONS
+// ============================================================================
+// 1. Open Power BI Desktop
+// 2. Click "Get Data" > "Blank Query"
+// 3. Go to "Advanced Editor"
+// 4. Delete the default code
+// 5. Paste the appropriate code from above (Option A or B)
+// 6. Update file paths to match your actual locations
+// 7. Click "Done" to load the data
+//
+// For multiple queries (fact + dimensions):
+// - Create separate queries for each table
+// - In Power BI Model view, create relationships between tables
+//
+// Recommended relationships (if using CSV Option B):
+// - fact_posting[job_id] → dim_job[job_id]
+// - fact_posting[company_id] → dim_company[company_id]
+// - fact_posting[location_id] → dim_location[location_id]
+// - fact_posting[employment_type_id] → dim_employment_type[employment_type_id]
+//
+// ============================================================================
+// TODO ITEMS
+// ============================================================================
+// TODO: Test SQLite ODBC driver installation
+// TODO: Update file paths to actual locations
+// TODO: Add error handling for missing files
+// TODO: Add parameters for dynamic file path configuration
+// TODO: Implement incremental refresh logic (if applicable)
+// ============================================================================
