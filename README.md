@@ -1,5 +1,9 @@
 # Job Market Analytics Pipeline
 
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Status](https://img.shields.io/badge/status-active-success.svg)
+
 A professional end-to-end ETL and analytics project demonstrating data engineering and business intelligence skills for Analytics Engineer and Senior BI Analyst roles.
 
 ## Overview
@@ -193,8 +197,17 @@ This project showcases:
 
 ## License
 
-This project is provided as a portfolio piece for demonstration purposes.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Contact
+## Author
+
+**crussedev9**
 
 Created as a portfolio project to demonstrate Analytics Engineer / Senior BI Analyst capabilities.
+
+- GitHub: [@crussedev9](https://github.com/crussedev9)
+- Project Link: [https://github.com/crussedev9/job-market-analytics-pipeline](https://github.com/crussedev9/job-market-analytics-pipeline)
+
+---
+
+⭐ If you find this project helpful or interesting, please consider giving it a star!
