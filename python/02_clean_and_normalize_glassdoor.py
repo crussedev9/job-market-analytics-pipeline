@@ -50,40 +50,47 @@ def normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def parse_salary_glassdoor(salary_str):
+def parse_salary_from_fields(row):
     """
-    Parse Glassdoor salary estimate.
+    Parse salary from the nested Glassdoor fields.
 
-    Examples:
-    - "$70K-$90K (Glassdoor est.)" → min=70000, max=90000
-    - "$120K-$150K" → min=120000, max=150000
-    - "Per Hour" or "-1" → None
+    Priority:
+    1. Use salary_high/salary_low if available (annual)
+    2. Fall back to pay_high/pay_low if payPeriod is yearly
+    3. Convert hourly to annual if needed
     """
-    if pd.isna(salary_str) or salary_str == '-1':
-        return None, None, 'USD'
+    salary_low = row.get('salary_low')
+    salary_high = row.get('salary_high')
+    pay_low = row.get('pay_low')
+    pay_high = row.get('pay_high')
+    pay_period = str(row.get('pay_period', '')).lower()
 
-    salary_str = str(salary_str).upper()
+    # Try salary fields first (these are annual)
+    if pd.notna(salary_low) and pd.notna(salary_high):
+        try:
+            return float(salary_low), float(salary_high), 'USD'
+        except:
+            pass
 
-    # Remove "(Glassdoor est.)" or similar
-    salary_str = re.sub(r'\(.*?\)', '', salary_str).strip()
+    # Try pay fields
+    if pd.notna(pay_low) and pd.notna(pay_high):
+        try:
+            low = float(pay_low)
+            high = float(pay_high)
 
-    # Look for pattern like $70K-$90K or $70,000-$90,000
-    pattern = r'\$?([\d,]+)K?\s*-\s*\$?([\d,]+)K?'
-    match = re.search(pattern, salary_str)
+            # Convert based on period
+            if 'hour' in pay_period:
+                # Assume 40 hours/week, 52 weeks/year
+                low = low * 40 * 52
+                high = high * 40 * 52
+            elif 'month' in pay_period:
+                low = low * 12
+                high = high * 12
+            # If yearly or empty, use as-is
 
-    if match:
-        min_sal = match.group(1).replace(',', '')
-        max_sal = match.group(2).replace(',', '')
-
-        # Convert K notation
-        if 'K' in salary_str.upper():
-            min_sal = int(float(min_sal) * 1000)
-            max_sal = int(float(max_sal) * 1000)
-        else:
-            min_sal = int(float(min_sal))
-            max_sal = int(float(max_sal))
-
-        return min_sal, max_sal, 'USD'
+            return low, high, 'USD'
+        except:
+            pass
 
     return None, None, 'USD'
 
@@ -200,10 +207,10 @@ def main():
     # Normalize columns
     df = normalize_column_names(df)
 
-    # Parse salary
+    # Parse salary from nested fields
     print("\nParsing salaries...")
     df[['salary_min', 'salary_max', 'salary_currency']] = df.apply(
-        lambda row: pd.Series(parse_salary_glassdoor(row.get('salary_estimate'))),
+        lambda row: pd.Series(parse_salary_from_fields(row)),
         axis=1
     )
     salary_parsed = df['salary_min'].notna().sum()
